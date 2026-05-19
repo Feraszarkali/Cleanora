@@ -1,0 +1,17 @@
+{
+    "Common": {
+        "loading": "Laden...",
+        "submit": "Absenden"
+    },
+    "Hero": {
+        "headline": "Professionelle Reinigungsfirmen finden \u2013 schnell, kostenlos und intelligent",
+        "subheadline": "Cleanora verbindet Unternehmen mit passenden Firmen.",
+        "primaryCTA": "Kostenloses Angebot erhalten"
+    },
+    "Services": {
+        "title": "Dienstleistungen",
+        "buroreinigung": {
+            "title": "B\u00fcroreinigung"
+        }
+    }
+}
