@@ -358,7 +358,6 @@ export default function AdminLeadsPage() {
                         <select 
                           value={selectedLead.status}
                           onChange={(e) => {
-                            // Update lead status logic here
                             setSelectedLead({ ...selectedLead, status: e.target.value })
                           }}
                           className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
@@ -415,7 +414,7 @@ export default function AdminLeadsPage() {
                       </div>
                     </div>
 
-                    {/* All Quotes Section - Show ALL quotes for this lead, including pending with null price */}
+                    {/* All Quotes Section - FIXED: Show ALL quotes including pending with NULL price */}
                     <div>
                       <h3 className="text-lg font-semibold text-blue-400 mb-4">All Quotes & Requests</h3>
                       {loadingQuotes ? (
@@ -445,6 +444,7 @@ export default function AdminLeadsPage() {
                                   </p>
                                 </div>
                                 <div className="flex flex-col gap-1 items-end">
+                                  {/* Show price input only for pending quotes without price */}
                                   {quote.price == null && quote.status === 'pending' && (
                                     <input
                                       type="number"
@@ -458,6 +458,7 @@ export default function AdminLeadsPage() {
                                       }}
                                     />
                                   )}
+                                  {/* Status dropdown for all quotes */}
                                   <select
                                     value={quote.status}
                                     onChange={(e) => handleUpdateQuote(quote.id, { status: e.target.value })}
