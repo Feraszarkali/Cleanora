@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'quote_id and status are required' }, { status: 400 })
     }
     
-    const validStatuses = ['pending', 'accepted', 'rejected', 'expired', 'selected']
+    const validStatuses = ['pending', 'submitted', 'offered', 'accepted', 'rejected', 'expired', 'selected']
     if (!validStatuses.includes(body.status)) {
       return NextResponse.json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, { status: 400 })
     }
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
     // Fetch quote to get lead_id for notifications
     const { data: quote, error: fetchError } = await supabase
       .from('quotes')
-      .select('id, lead_id, company_id, price, status, message')
+      .select('id, lead_id, company_id, price, final_price, proposed_price, status, message, notes, estimated_duration')
       .eq('id', body.quote_id)
       .single()
     
@@ -144,8 +144,8 @@ export async function PATCH(request: NextRequest) {
               id: quote.id,
               lead_id: quote.lead_id,
               company_id: quote.company_id,
-              price: quote.price ?? null,
-              message: quote.message ?? null,
+              price: quote.price ?? quote.final_price ?? quote.proposed_price ?? null,
+              message: quote.message ?? quote.notes ?? null,
             },
             company: {
               id: company.id,
@@ -154,7 +154,7 @@ export async function PATCH(request: NextRequest) {
             },
           })
 
-          const emailOutcome = notificationResults.find((item) => item.channel === 'email')
+          const emailOutcome = notificationResults.find((item: { channel?: string; failures?: string[] }) => item.channel === 'email')
           if (emailOutcome?.failures.length) {
             console.warn('[Quotes API] Winning quote email warnings:', emailOutcome.failures)
           }

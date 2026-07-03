@@ -34,7 +34,11 @@ interface QuoteItem {
   lead_id: string
   company_id: number
   price: number | null
+  final_price?: number | null
+  proposed_price?: number | null
   message: string | null
+  notes?: string | null
+  estimated_duration?: string | null
   status: "pending" | "accepted" | "rejected" | "selected" | string
   created_at: string
   lead: LeadData | null
@@ -50,6 +54,8 @@ interface Toast {
 const STATUS_COLORS: Record<string, string> = {
   new: "from-slate-500/20 to-slate-600/10 text-slate-300 border-slate-500/30",
   pending: "from-amber-500/20 to-amber-600/10 text-amber-300 border-amber-500/30",
+  submitted: "from-cyan-500/20 to-cyan-600/10 text-cyan-300 border-cyan-500/30",
+  offered: "from-blue-500/20 to-blue-600/10 text-blue-300 border-blue-500/30",
   sent: "from-blue-500/20 to-blue-600/10 text-blue-300 border-blue-500/30",
   accepted: "from-emerald-500/20 to-emerald-600/10 text-emerald-300 border-emerald-500/30",
   rejected: "from-red-500/20 to-red-600/10 text-red-300 border-red-500/30",
@@ -60,6 +66,8 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   new: "Neu",
   pending: "Ausstehend",
+  submitted: "Eingereicht",
+  offered: "Angeboten",
   sent: "Gesendet",
   accepted: "Angenommen",
   rejected: "Abgelehnt",
@@ -70,6 +78,8 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_ACTIONS: Record<string, { label: string; value: string; color: string }[]> = {
   new: [{ label: "Annehmen", value: "accepted", color: "bg-emerald-600 hover:bg-emerald-500" }],
   pending: [{ label: "Annehmen", value: "accepted", color: "bg-emerald-600 hover:bg-emerald-500" }],
+  submitted: [{ label: "Annehmen", value: "accepted", color: "bg-emerald-600 hover:bg-emerald-500" }],
+  offered: [{ label: "Annehmen", value: "accepted", color: "bg-emerald-600 hover:bg-emerald-500" }],
   accepted: [
     { label: "Abschließen", value: "completed", color: "bg-violet-600 hover:bg-violet-500" },
     { label: "Ablehnen", value: "rejected", color: "bg-red-600 hover:bg-red-500" },
@@ -97,6 +107,17 @@ const formatDate = (dateStr: string | null | undefined): string => {
   } catch {
     return "-"
   }
+}
+
+const estimateDurationFromServices = (services: string | string[] | null | undefined): string => {
+  const serviceCount = Array.isArray(services)
+    ? services.filter((item) => typeof item === 'string' && item.trim().length > 0).length
+    : typeof services === 'string' && services.trim().length > 0
+      ? services.split(',').map((item) => item.trim()).filter(Boolean).length
+      : 1
+
+  const hours = Math.max(2, Math.max(1, serviceCount) * 1.5)
+  return `${hours.toFixed(1)}h`
 }
 
 const generateId = (): string => Math.random().toString(36).substring(2, 9)
@@ -138,7 +159,11 @@ const parseQuoteItem = (q: any): QuoteItem | null => {
     lead_id: String(q.lead_id || ''),
     company_id: Number(q.company_id || 0),
     price: q.price != null ? Number(q.price) : null,
+    final_price: q.final_price != null ? Number(q.final_price) : null,
+    proposed_price: q.proposed_price != null ? Number(q.proposed_price) : null,
     message: q.message ?? null,
+    notes: q.notes ?? null,
+    estimated_duration: q.estimated_duration ?? null,
     status: q.status || 'pending',
     created_at: q.created_at || '',
     lead,
@@ -223,7 +248,11 @@ export default function CompanyPortalPage(): JSX.Element {
           lead_id,
           company_id,
           price,
+          final_price,
+          proposed_price,
           message,
+          notes,
+          estimated_duration,
           status,
           created_at,
           lead:leads (
@@ -348,22 +377,69 @@ export default function CompanyPortalPage(): JSX.Element {
     if (!urlCompanyId) return
     setUpdatingStatus(true)
     try {
+      const quote = quotes.find((item) => item.id === quoteId)
+      if (!quote) throw new Error("Quote not found")
+
+      const normalizedMessage = message.trim() || null
+      const estimatedDuration = estimateDurationFromServices(quote.lead?.services)
+
+      const { data: existingQuote, error: existingError } = await supabase
+        .from("quotes")
+        .select("id")
+        .eq("lead_id", quote.lead_id)
+        .eq("company_id", urlCompanyId)
+        .maybeSingle<{ id: string }>()
+
+      if (existingError) throw existingError
+
+      const targetQuoteId = existingQuote?.id || quoteId
+
       const { error } = await supabase
         .from("quotes")
         .update({ 
           price: price,
-          message: message || null,
-          status: 'pending'
+          final_price: price,
+          proposed_price: price,
+          message: normalizedMessage,
+          notes: normalizedMessage,
+          estimated_duration: estimatedDuration,
+          status: 'submitted'
         })
-        .eq("id", quoteId)
+        .eq("id", targetQuoteId)
         .eq("company_id", urlCompanyId)
       if (error) throw error
       
       setQuotes((prev) =>
-        prev.map((q) => (q.id === quoteId ? { ...q, price, message: message || null, status: 'pending' } : q))
+        prev.map((q) =>
+          q.id === targetQuoteId
+            ? {
+                ...q,
+                price,
+                final_price: price,
+                proposed_price: price,
+                message: normalizedMessage,
+                notes: normalizedMessage,
+                estimated_duration: estimatedDuration,
+                status: 'submitted',
+              }
+            : q
+        )
       )
-      if (selectedQuote?.id === quoteId) {
-        setSelectedQuote((prev) => (prev ? { ...prev, price, message: message || null, status: 'pending' } : null))
+      if (selectedQuote?.id === targetQuoteId) {
+        setSelectedQuote((prev) =>
+          prev
+            ? {
+                ...prev,
+                price,
+                final_price: price,
+                proposed_price: price,
+                message: normalizedMessage,
+                notes: normalizedMessage,
+                estimated_duration: estimatedDuration,
+                status: 'submitted',
+              }
+            : null
+        )
       }
       addToast("Angebot erfolgreich übermittelt", "success")
     } catch (err: unknown) {
@@ -372,7 +448,7 @@ export default function CompanyPortalPage(): JSX.Element {
     } finally {
       setUpdatingStatus(false)
     }
-  }, [urlCompanyId, selectedQuote, addToast])
+  }, [urlCompanyId, quotes, selectedQuote, addToast])
 
   // Logout
   const handleLogout = useCallback((): void => {
@@ -702,7 +778,7 @@ export default function CompanyPortalPage(): JSX.Element {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      {quote.status === "pending" && !hasPrice && (
+                      {(quote.status === "pending" || quote.status === "submitted" || quote.status === "offered") && !hasPrice && (
                         <button
                           onClick={() => {
                             const priceInput = prompt("Angebotspreis in €:", "")
@@ -719,7 +795,7 @@ export default function CompanyPortalPage(): JSX.Element {
                           Preis eingeben
                         </button>
                       )}
-                      {quote.status === "pending" && hasPrice && !isSelected && !isRejected && (
+                      {(quote.status === "pending" || quote.status === "submitted" || quote.status === "offered") && hasPrice && !isSelected && !isRejected && (
                         <>
                           <button
                             onClick={() => updateQuoteStatus(quote.id, "accepted")}

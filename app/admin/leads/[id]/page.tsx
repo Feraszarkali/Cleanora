@@ -115,8 +115,18 @@ function statusBadgeClass(status: string): string {
   if (status === 'cancelled') return 'bg-red-500/10 text-red-300 border-red-500/30'
   if (status === 'selected' || status === 'accepted') return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
   if (status === 'rejected') return 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+  if (status === 'submitted' || status === 'offered') return 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
   if (status === 'pending') return 'bg-slate-500/10 text-slate-300 border-slate-500/30'
   return 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+}
+
+function quoteStatusDisplay(quote: QuoteRecord): { key: string; label: string } {
+  const hasPrice = quotePrice(quote) != null
+  if ((quote.status === 'pending' && hasPrice) || quote.status === 'submitted' || quote.status === 'offered') {
+    return { key: 'submitted', label: 'Submitted' }
+  }
+
+  return { key: quote.status, label: formatStatus(quote.status) }
 }
 
 function safeNumber(value: unknown): number | null {
@@ -967,6 +977,7 @@ export default function AdminLeadDetailsPage(): JSX.Element | null {
                   sortedQuotes.map((quote) => {
                     const price = quotePrice(quote)
                     const durationText = durationByQuoteId.get(quote.id) || '-'
+                    const statusView = quoteStatusDisplay(quote)
 
                     return (
                       <tr key={quote.id} className="hover:bg-slate-800/30 transition">
@@ -986,8 +997,8 @@ export default function AdminLeadDetailsPage(): JSX.Element | null {
                         <td className="px-3 py-3 text-slate-300">{durationText}</td>
                         <td className="px-3 py-3 text-slate-400">{formatDateTime(quote.created_at)}</td>
                         <td className="px-3 py-3">
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(quote.status)}`}>
-                            {formatStatus(quote.status)}
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(statusView.key)}`}>
+                            {statusView.label}
                           </span>
                         </td>
                         <td className="px-3 py-3">

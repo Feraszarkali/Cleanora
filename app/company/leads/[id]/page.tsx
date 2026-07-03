@@ -33,6 +33,7 @@ type LeadDetailState = {
 
 function statusBadgeClass(status: string, hasSubmittedPrice: boolean): string {
   const normalized = status.toLowerCase()
+  if (normalized === 'submitted' || normalized === 'offered') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
   if (normalized === 'accepted' || normalized === 'selected') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
   if (normalized === 'rejected' || normalized === 'expired') return 'border-red-500/30 bg-red-500/10 text-red-300'
   if (normalized === 'pending' && hasSubmittedPrice) return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
@@ -181,12 +182,32 @@ export default function CompanyLeadDetailsPage(): JSX.Element {
     setState((current) => ({ ...current, saving: true, error: null }))
 
     try {
+      const normalizedMessage = message.trim() || null
+      const serviceCount = Math.max(1, pickServiceList(state.lead).length)
+      const estimatedDuration = estimateDuration(
+        {
+          id: state.quote?.id || 'temp',
+          lead_id: state.lead.id,
+          company_id: state.companyId,
+          price: parsedPrice,
+          message: normalizedMessage,
+          status: 'submitted',
+          created_at: state.quote?.created_at || state.lead.created_at,
+          lead: state.lead,
+        },
+        serviceCount
+      )
+
       const payload = {
         lead_id: state.lead.id,
         company_id: state.companyId,
         price: parsedPrice,
-        message: message.trim() || null,
-        status: 'pending',
+        final_price: parsedPrice,
+        proposed_price: parsedPrice,
+        message: normalizedMessage,
+        notes: normalizedMessage,
+        estimated_duration: estimatedDuration,
+        status: 'submitted',
       }
 
       const { data: existingQuote, error: existingError } = await supabase
@@ -203,8 +224,12 @@ export default function CompanyLeadDetailsPage(): JSX.Element {
           .from('quotes')
           .update({
             price: parsedPrice,
-            message: message.trim() || null,
-            status: 'pending',
+            final_price: parsedPrice,
+            proposed_price: parsedPrice,
+            message: normalizedMessage,
+            notes: normalizedMessage,
+            estimated_duration: estimatedDuration,
+            status: 'submitted',
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingQuote.id)
@@ -221,8 +246,12 @@ export default function CompanyLeadDetailsPage(): JSX.Element {
           ? {
               ...current.quote,
               price: parsedPrice,
-              message: message.trim() || null,
-              status: 'pending',
+              final_price: parsedPrice,
+              proposed_price: parsedPrice,
+              message: normalizedMessage,
+              notes: normalizedMessage,
+              estimated_duration: estimatedDuration,
+              status: 'submitted',
               updated_at: new Date().toISOString(),
             }
           : {
@@ -230,8 +259,12 @@ export default function CompanyLeadDetailsPage(): JSX.Element {
               lead_id: current.lead?.id || leadId,
               company_id: current.companyId || 0,
               price: parsedPrice,
-              message: message.trim() || null,
-              status: 'pending',
+              final_price: parsedPrice,
+              proposed_price: parsedPrice,
+              message: normalizedMessage,
+              notes: normalizedMessage,
+              estimated_duration: estimatedDuration,
+              status: 'submitted',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               lead: current.lead,
@@ -289,7 +322,9 @@ export default function CompanyLeadDetailsPage(): JSX.Element {
   }
   const duration = estimateDuration(quoteForDuration, Math.max(1, services.length))
   const submitted = Boolean(state.quote?.price)
-  const statusLabel = state.quote?.status === 'pending' && submitted ? 'Submitted' : formatStatus(state.quote?.status || 'pending')
+  const statusLabel = (state.quote?.status === 'pending' && submitted) || state.quote?.status === 'submitted' || state.quote?.status === 'offered'
+    ? 'Submitted'
+    : formatStatus(state.quote?.status || 'pending')
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black p-4 text-slate-100 md:p-8">
