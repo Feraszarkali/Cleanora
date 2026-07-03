@@ -1,6 +1,7 @@
 // app/api/quotes/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase/server'
+import { dispatchWinningQuoteNotification, isEmailNotificationReady } from '@/lib/marketplace/communication'
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,12 +56,41 @@ export async function PATCH(request: NextRequest) {
     // Fetch quote to get lead_id for notifications
     const { data: quote, error: fetchError } = await supabase
       .from('quotes')
-      .select('lead_id, company_id, price')
+      .select('id, lead_id, company_id, price, status, message')
       .eq('id', body.quote_id)
       .single()
     
     if (fetchError || !quote) {
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+    }
+
+    const { data: lead, error: leadFetchError } = await supabase
+      .from('leads')
+      .select('id, full_name, email, phone, city, services, preferred_date, preferred_time, notes, status')
+      .eq('id', quote.lead_id)
+      .single()
+
+    if (leadFetchError || !lead) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    }
+
+    const { data: company, error: companyFetchError } = await supabase
+      .from('cleaning_companies')
+      .select('id, company_name, email')
+      .eq('id', quote.company_id)
+      .single()
+
+    if (companyFetchError || !company) {
+      return NextResponse.json({ error: 'Company not found' }, { status: 404 })
+    }
+
+    if (body.status === 'selected' && quote.status === 'selected' && lead.status === 'quote_sent') {
+      return NextResponse.json({
+        success: true,
+        quote_id: body.quote_id,
+        new_status: body.status,
+        already_finalized: true,
+      })
     }
     
     // Update quote status
@@ -74,6 +104,65 @@ export async function PATCH(request: NextRequest) {
     
     if (updateError) {
       return NextResponse.json({ error: 'Failed to update quote' }, { status: 500 })
+    }
+
+    if (body.status === 'selected') {
+      const { error: updateOthersError } = await supabase
+        .from('quotes')
+        .update({ status: 'rejected' })
+        .eq('lead_id', quote.lead_id)
+        .neq('id', body.quote_id)
+
+      if (updateOthersError) {
+        return NextResponse.json({ error: 'Failed to update competing quotes' }, { status: 500 })
+      }
+
+      const { error: updateLeadError } = await supabase
+        .from('leads')
+        .update({ status: 'quote_sent' })
+        .eq('id', quote.lead_id)
+
+      if (updateLeadError) {
+        return NextResponse.json({ error: 'Failed to update lead status' }, { status: 500 })
+      }
+
+      if (isEmailNotificationReady() && lead.email) {
+        try {
+          const notificationResults = await dispatchWinningQuoteNotification({
+            lead: {
+              id: lead.id,
+              full_name: lead.full_name,
+              email: lead.email,
+              phone: lead.phone,
+              city: lead.city,
+              services: lead.services,
+              preferred_date: lead.preferred_date,
+              preferred_time: lead.preferred_time,
+              notes: lead.notes,
+            },
+            quote: {
+              id: quote.id,
+              lead_id: quote.lead_id,
+              company_id: quote.company_id,
+              price: quote.price ?? null,
+              message: quote.message ?? null,
+            },
+            company: {
+              id: company.id,
+              company_name: company.company_name,
+              email: company.email ?? null,
+            },
+          })
+
+          const emailOutcome = notificationResults.find((item) => item.channel === 'email')
+          if (emailOutcome?.failures.length) {
+            console.warn('[Quotes API] Winning quote email warnings:', emailOutcome.failures)
+          }
+        } catch (notificationError) {
+          const error = notificationError as Error
+          console.warn('[Quotes API] Winning quote notification failed after selection:', error.message)
+        }
+      }
     }
     
     return NextResponse.json({

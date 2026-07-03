@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findMatchingCompanies, createQuoteRequests } from '@/lib/marketplace/matching'
+import { dispatchLeadCreatedNotifications, isEmailNotificationReady } from '@/lib/marketplace/communication'
 
 // Inline Supabase admin client factory
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -75,6 +76,29 @@ export async function POST(req: Request) {
     const { created, skipped, errors } = await createQuoteRequests(lead.id, matchedCompanies)
 
     console.log('[Leads API] ✅ Quote creation - created:', created, 'skipped:', skipped, 'errors:', errors)
+
+    if (created > 0 && matchedCompanies.length > 0 && isEmailNotificationReady()) {
+      const notificationResults = await dispatchLeadCreatedNotifications({
+        lead: {
+          id: lead.id,
+          full_name: lead.full_name,
+          email: lead.email,
+          phone: lead.phone,
+          city: lead.city,
+          service_type: lead.service_type,
+          services: lead.services,
+          preferred_date: lead.preferred_date,
+          preferred_time: lead.preferred_time,
+          notes: lead.notes,
+        },
+        companies: matchedCompanies,
+      })
+
+      const emailOutcome = notificationResults.find((item) => item.channel === 'email')
+      if (emailOutcome?.failures.length) {
+        console.warn('[Leads API] Company notification warnings:', emailOutcome.failures)
+      }
+    }
 
     return NextResponse.json({
       success: true,
