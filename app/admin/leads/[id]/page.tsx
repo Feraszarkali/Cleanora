@@ -27,6 +27,7 @@ type LeadRecord = {
   status: string
   created_at: string
   company_id?: number | string | null
+  archived?: boolean | null
   [key: string]: unknown
 }
 
@@ -677,6 +678,30 @@ export default function AdminLeadDetailsPage(): JSX.Element | null {
     }
   }, [refreshAll])
 
+  const handleArchiveLead = useCallback(async () => {
+    if (!lead || lead.archived) return
+
+    setBusyAction('archive-lead')
+    setError(null)
+    try {
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({ archived: true })
+        .eq('id', lead.id)
+
+      if (updateError) throw updateError
+
+      setLead((prev) => (prev ? { ...prev, archived: true } : prev))
+      setSuccessMessage('Lead archived.')
+      await refreshAll()
+    } catch (err: unknown) {
+      const e = err as Error
+      setError(e.message || 'Failed to archive lead')
+    } finally {
+      setBusyAction(null)
+    }
+  }, [lead, refreshAll])
+
   if (isAuthenticated === null) return null
 
   if (loading) {
@@ -724,6 +749,19 @@ export default function AdminLeadDetailsPage(): JSX.Element | null {
               <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(lead.status)}`}>
                 {formatStatus(lead.status)}
               </span>
+              {lead.archived && (
+                <span className="inline-flex rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+                  Archived
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleArchiveLead}
+                disabled={busyAction === 'archive-lead' || Boolean(lead.archived)}
+                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-60"
+              >
+                {busyAction === 'archive-lead' ? 'Archiving...' : lead.archived ? 'Archived' : 'Archive Lead'}
+              </button>
               <button
                 type="button"
                 onClick={refreshAll}
@@ -788,12 +826,18 @@ export default function AdminLeadDetailsPage(): JSX.Element | null {
 
             <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.12em] text-slate-400">Status History</h3>
             <ul className="mt-3 space-y-2 text-sm">
-              {statusHistory.map((item) => (
-                <li key={item.id} className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
-                  <p className="text-slate-200">{item.label}</p>
-                  <p className="text-xs text-slate-500">{formatDateTime(item.at)}</p>
+              {activities.length === 0 ? (
+                <li className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-4 text-sm text-slate-500">
+                  No activity history available for this lead.
                 </li>
-              ))}
+              ) : (
+                activities.map((activity) => (
+                  <li key={activity.id} className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+                    <p className="text-slate-200">{activity.title || activity.message || activity.description || activity.action || activity.type || 'Activity event'}</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(activity.created_at)}</p>
+                  </li>
+                ))
+              )}
             </ul>
           </article>
         </section>

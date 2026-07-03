@@ -362,9 +362,8 @@ export default function AdminLeadsPage() {
   }, [selectedLead, fetchQuotes])
 
   const handleViewLead = useCallback((lead: Lead) => {
-    setModalTab('quotes')
-    setSelectedLead(lead)
-  }, [])
+    router.push(`/admin/leads/${lead.id}`)
+  }, [router])
 
   const handleAssignCompanies = useCallback((lead: Lead) => {
     setModalTab('details')

@@ -674,7 +674,7 @@ export default function CompanyPortalPage(): JSX.Element {
                       <p className="text-slate-400"><span className="text-slate-500">Wunschdatum:</span> <span className="text-slate-200">{formatDate(quote.lead.first_date)}</span></p>
                     )}
                     {quote.message && (
-                      <p className="text-slate-400 col-span-2"><span className="text-slate-500">Nachricht:</span> <span className="text-slate-300 italic">"{quote.message}"</span></p>
+                      <p className="text-slate-400 col-span-2"><span className="text-slate-500">Nachricht:</span> <span className="text-slate-300 italic">&quot;{quote.message}&quot;</span></p>
                     )}
                   </div>
 
@@ -780,7 +780,7 @@ export default function CompanyPortalPage(): JSX.Element {
                   )}
                   
                   <div className="col-span-2"><span className="text-slate-400">Status:</span><StatusBadge status={selectedQuote.status} /></div>
-                  {selectedQuote.message && <div className="col-span-2"><span className="text-slate-400">Nachricht:</span><p className="text-slate-300 italic bg-slate-900/50 p-2 rounded">"{selectedQuote.message}"</p></div>}
+                  {selectedQuote.message && <div className="col-span-2"><span className="text-slate-400">Nachricht:</span><p className="text-slate-300 italic bg-slate-900/50 p-2 rounded">&quot;{selectedQuote.message}&quot;</p></div>}
                 </div>
 
                 {!selectedQuote.status.match(/^(selected|rejected)$/) && (

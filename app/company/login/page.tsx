@@ -1,60 +1,90 @@
 // app/company/login/page.tsx
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../../../lib/supabaseClient'
+
+type CompanyRecord = {
+  id: number
+  company_name: string | null
+  email: string | null
+  active: boolean
+}
 
 export default function CompanyLogin(): JSX.Element {
   const router = useRouter()
-  const [email, setEmail] = useState<string>("")
+  const [email, setEmail] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Check if already logged in
   useEffect(() => {
-    const storedCompanyId = localStorage.getItem("company_id")
-    if (storedCompanyId) {
-      router.replace(`/company/${storedCompanyId}`)
+    const checkSession = async (): Promise<void> => {
+      const { data } = await supabase.auth.getUser()
+      const user = data.user
+      if (!user?.email) return
+
+      const { data: company } = await supabase
+        .from('cleaning_companies')
+        .select('id, company_name, email, active')
+        .eq('email', user.email.toLowerCase())
+        .eq('active', true)
+        .maybeSingle()
+
+      if (company) {
+        localStorage.setItem('company_id', String(company.id))
+        router.replace('/company/dashboard')
+      }
     }
+
+    checkSession()
   }, [router])
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault()
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
     setError(null)
     setLoading(true)
 
-    if (!email.trim()) {
-      setError("Bitte geben Sie Ihre E-Mail-Adresse ein")
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !password.trim()) {
+      setError('Bitte geben Sie E-Mail und Passwort ein')
       setLoading(false)
       return
     }
 
     try {
-      // Look up company by email
-      const { data, error } = await supabase
-        .from("cleaning_companies")
-        .select("id, company_name, active")
-        .eq("email", email.trim().toLowerCase())
-        .maybeSingle()
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      })
 
-      if (error) throw error
+      if (signInError) throw signInError
 
-      if (!data || !data.active) {
-        setError("Kein aktives Unternehmen mit dieser E-Mail gefunden")
-        setLoading(false)
-        return
+      const userEmail = signInData.user?.email?.toLowerCase()
+      if (!userEmail) {
+        throw new Error('Keine gültige Firmen-Sitzung gefunden')
       }
 
-      // Store company ID in localStorage (as string for safety)
-      localStorage.setItem("company_id", String(data.id))
-      
-      // Redirect to company portal
-      router.replace(`/company/${data.id}`)
+      const { data: company, error: companyError } = await supabase
+        .from('cleaning_companies')
+        .select('id, company_name, email, active')
+        .eq('email', userEmail)
+        .eq('active', true)
+        .maybeSingle<CompanyRecord>()
+
+      if (companyError) throw companyError
+      if (!company) {
+        await supabase.auth.signOut()
+        throw new Error('Kein aktives Unternehmen mit dieser E-Mail gefunden')
+      }
+
+      localStorage.setItem('company_id', String(company.id))
+      router.replace('/company/dashboard')
     } catch (err: unknown) {
       const error = err as Error
-      setError(error.message || "Login fehlgeschlagen")
+      setError(error.message || 'Login fehlgeschlagen')
     } finally {
       setLoading(false)
     }
@@ -68,7 +98,7 @@ export default function CompanyLogin(): JSX.Element {
             Firmen-Login
           </h1>
           <p className="mt-2 text-slate-400 text-sm">
-            Melden Sie sich mit Ihrer Firmen-E-Mail an
+            Melden Sie sich mit Ihrem Supabase-Konto an
           </p>
         </div>
 
@@ -94,6 +124,20 @@ export default function CompanyLogin(): JSX.Element {
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+                Passwort
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700/50 text-slate-200 placeholder-slate-500 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition"
+                disabled={loading}
+              />
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -108,20 +152,20 @@ export default function CompanyLogin(): JSX.Element {
                   Wird geprüft...
                 </>
               ) : (
-                "Anmelden"
+                'Anmelden'
               )}
             </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-slate-800/50 text-center">
             <p className="text-slate-400 text-sm">
-              Kein Unternehmen?{" "}
+              Kein Unternehmen?{' '}
               <Link href="/" className="text-cyan-400 hover:text-cyan-300 transition">
                 Zurück zur Startseite
               </Link>
             </p>
             <p className="text-slate-500 text-xs mt-2">
-              Für Admin-Zugang:{" "}
+              Für Admin-Zugang:{' '}
               <Link href="/admin" className="text-slate-400 hover:text-slate-300 transition">
                 Admin Dashboard
               </Link>
