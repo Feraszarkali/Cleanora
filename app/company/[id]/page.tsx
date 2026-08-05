@@ -248,11 +248,7 @@ export default function CompanyPortalPage(): JSX.Element {
           lead_id,
           company_id,
           price,
-          final_price,
-          proposed_price,
           message,
-          notes,
-          estimated_duration,
           status,
           created_at,
           lead:leads (
@@ -377,66 +373,39 @@ export default function CompanyPortalPage(): JSX.Element {
     if (!urlCompanyId) return
     setUpdatingStatus(true)
     try {
-      const quote = quotes.find((item) => item.id === quoteId)
-      if (!quote) throw new Error("Quote not found")
-
       const normalizedMessage = message.trim() || null
-      const estimatedDuration = estimateDurationFromServices(quote.lead?.services)
-
-      const { data: existingQuote, error: existingError } = await supabase
-        .from("quotes")
-        .select("id")
-        .eq("lead_id", quote.lead_id)
-        .eq("company_id", urlCompanyId)
-        .maybeSingle<{ id: string }>()
-
-      if (existingError) throw existingError
-
-      const targetQuoteId = existingQuote?.id || quoteId
 
       const { error } = await supabase
         .from("quotes")
         .update({ 
           price: price,
-          final_price: price,
-          proposed_price: price,
           message: normalizedMessage,
-          notes: normalizedMessage,
-          estimated_duration: estimatedDuration,
-          status: 'submitted'
+          status: 'pending'
         })
-        .eq("id", targetQuoteId)
+        .eq("id", quoteId)
         .eq("company_id", urlCompanyId)
       if (error) throw error
       
       setQuotes((prev) =>
         prev.map((q) =>
-          q.id === targetQuoteId
+          q.id === quoteId
             ? {
                 ...q,
                 price,
-                final_price: price,
-                proposed_price: price,
                 message: normalizedMessage,
-                notes: normalizedMessage,
-                estimated_duration: estimatedDuration,
-                status: 'submitted',
+                status: 'pending',
               }
             : q
         )
       )
-      if (selectedQuote?.id === targetQuoteId) {
+      if (selectedQuote?.id === quoteId) {
         setSelectedQuote((prev) =>
           prev
             ? {
                 ...prev,
                 price,
-                final_price: price,
-                proposed_price: price,
                 message: normalizedMessage,
-                notes: normalizedMessage,
-                estimated_duration: estimatedDuration,
-                status: 'submitted',
+                status: 'pending',
               }
             : null
         )
@@ -448,7 +417,7 @@ export default function CompanyPortalPage(): JSX.Element {
     } finally {
       setUpdatingStatus(false)
     }
-  }, [urlCompanyId, quotes, selectedQuote, addToast])
+  }, [urlCompanyId, selectedQuote, addToast])
 
   // Logout
   const handleLogout = useCallback((): void => {
@@ -534,7 +503,7 @@ export default function CompanyPortalPage(): JSX.Element {
   }
 
   // Not found / error state
-  if (error || !company) {
+  if (!company) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -544,7 +513,7 @@ export default function CompanyPortalPage(): JSX.Element {
             </svg>
           </div>
           <h2 className="text-xl font-bold text-slate-200 mb-2">Unternehmen nicht gefunden</h2>
-          <p className="text-slate-400 mb-6">Das ausgewählte Unternehmen existiert nicht oder ist nicht aktiv.</p>
+          <p className="text-slate-400 mb-6">{error || "Das ausgewählte Unternehmen existiert nicht oder ist nicht aktiv."}</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={handleLogout}
